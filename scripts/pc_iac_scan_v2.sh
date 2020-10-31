@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # shellcheck disable=SC2181
+# Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.
 
 # INSTALLATION:
 #
@@ -148,13 +149,13 @@ if [ ! -s "${PC_IAC_CREATE_FILE}" ]; then
   error_and_exit "Create Scan Returned No Response Data"
 fi
 
-PC_IAC_ID=$(cat "${PC_IAC_CREATE_FILE}" | jq -r '.data.id')
+PC_IAC_ID=$(jq -r '.data.id' < "${PC_IAC_CREATE_FILE}")
 
 if [ -z "${PC_IAC_ID}" ]; then
   error_and_exit "Scan ID Missing From 'Create Scan' Response"
 fi
 
-PC_IAC_URL=$(cat "${PC_IAC_CREATE_FILE}" | jq -r '.data.links.url')
+PC_IAC_URL=$(jq -r '.data.links.url' < "${PC_IAC_CREATE_FILE}")
 
 if [ -z "${PC_IAC_URL}" ]; then
   error_and_exit "Scan URL Missing From 'Create Scan' Response"
@@ -164,12 +165,12 @@ fi
 
 echo "Uploading Files"
 
-zip -r -q "/tmp/${MODULE}.zip" ${MODULE}
+zip -r -q "/tmp/${MODULE}.zip" "${MODULE}"
 
 rm -f "${PC_IAC_UPLOAD_FILE}"
 
 curl --silent --show-error \
-  --request PUT $PC_IAC_URL \
+  --request PUT "${PC_IAC_URL}" \
   --upload-file "/tmp/${MODULE}.zip" \
   --output "${PC_IAC_UPLOAD_FILE}"
 
@@ -215,13 +216,13 @@ fi
 # There is no output upon success ...
 
 if [ -s "${PC_IAC_START_FILE}" ]; then
-  STATUS=$(cat "${PC_IAC_START_FILE}" | jq -r '.status')
+  STATUS=$(jq -r '.status' < "${PC_IAC_START_FILE}")
 
   if [ -z "${STATUS}" ]; then
     error_and_exit "Status Missing From 'Start Scan' Response"
   fi
 
-  if [ $STATUS -ne 200 ]; then
+  if [ "${STATUS}" -ne 200 ]; then
     error_and_exit "Start Scan Returned: ${STATUS}"
   fi
 fi
@@ -251,7 +252,7 @@ do
   if [[ $HTTP_CODE == 5?? ]]; then
     echo -n " ${HTTP_CODE} "
   else
-    SCAN_STATUS=$(cat "${PC_IAC_STATUS_FILE}" | jq -r '.data.attributes.status')
+    SCAN_STATUS=$(jq -r '.data.attributes.status' < "${PC_IAC_STATUS_FILE}")
     if [ -z "${SCAN_STATUS}" ]; then
       error_and_exit "Status Missing From 'Query Scan Status' Response"
     fi
@@ -275,14 +276,14 @@ if [ $? -ne 0 ]; then
   error_and_exit "Query Scan Results Failed"
 fi
 
-HIGH=$(cat "${PC_IAC_RESULTS}" | jq '.meta.matchedPoliciesSummary.high')
-MEDIUM=$(cat "${PC_IAC_RESULTS}" | jq '.meta.matchedPoliciesSummary.medium')
-LOW=$(cat "${PC_IAC_RESULTS}" | jq '.meta.matchedPoliciesSummary.low')
+HIGH=$(  jq '.meta.matchedPoliciesSummary.high'   < "${PC_IAC_RESULTS}")
+MEDIUM=$(jq '.meta.matchedPoliciesSummary.medium' < "${PC_IAC_RESULTS}")
+LOW=$(   jq '.meta.matchedPoliciesSummary.low'    < "${PC_IAC_RESULTS}")
 
 # echo "Results in: ${PC_IAC_RESULTS}"
 echo "Results:"
 echo
-cat "${PC_IAC_RESULTS}" | jq '.data'
+jq '.data' < "${PC_IAC_RESULTS}"
 echo
 echo "Summary:"
 echo
