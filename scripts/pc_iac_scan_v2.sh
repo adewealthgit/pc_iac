@@ -1,17 +1,18 @@
 #!/bin/bash
 
 # shellcheck disable=SC2181
-# SC2181 = Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.
+# SC2181: Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.
 
 # INSTALLATION:
 #
 # Copy this script to ~/pc_iac_scan.sh
 # Edit [API, USERNAME, PASSWORD] below
 # Make ~/pc_iac_scan.sh executable
+# Calculon, compute!
 
 # USAGE:
 #
-# ~/pc_iac_scan.sh <module> <template_type>
+# ~/pc_iac_scan.sh <template_file_or_directory> <template_type>
 
 DEBUG=false
 
@@ -28,8 +29,10 @@ PASSWORD=1234567890=
 
 #### END USER CONFIGURATION
 
-MODULE=$1
+TEMPLATE=$1
 TEMPLATETYPE=$2
+
+TEMPLATE_TYPES=("cft", "k8s", "tf")
 
 #### Utility functions.
 
@@ -48,18 +51,33 @@ error_and_exit() {
   exit 1
 }
 
-# TODO: Optionally accept and set TEMPLATEVERSION.
+contains() {
+  local item="${1}"
+  shift
+  local list=("$@")
+  for i in "${list[@]}"; do [[ "${i}" == "${item}" ]] && return 1; done
+  return 0
+}
+
+# TODO: Optionally accept and set TEMPLATEVERSION?
 #
 # TEMPLATEVERSION="0.12"
-#
 # 'templateVersion'': '${TEMPLATEVERSION}'
 
-if [ -z "${MODULE}" ]; then
-  error_and_exit "Please specify a module"
+if [ -z "${TEMPLATE}" ]; then
+  error_and_exit "Please specify the file or directory to scan"
 fi
 
 if [ -z "${TEMPLATETYPE}" ]; then
-  error_and_exit "Please specify a template type [cft, k8s, tf]"
+  error_and_exit "Please specify the template type [cft, k8s, tf]"
+fi
+
+if [ ! -e "${TEMPLATE}" ]; then
+  error_and_exit "Template file or directory to scan does not exist: ${TEMPLATE}"
+fi
+
+if contains "${TEMPLATETYPE}" "${TEMPLATE_TYPES[@]}"; then
+  error_and_exit "Template type invalid: ${TEMPLATETYPE}, must be one of: ${TEMPLATE_TYPES[*]}"
 fi
 
 PC_API_LOGIN_FILE=/tmp/prisma-api-login.json
@@ -111,16 +129,16 @@ debug "Token: ${TOKEN}"
 #### Create an IaC scan asset in Prisma Cloud.
 # https://api.docs.prismacloud.io/reference#startasyncscan
 
-echo "Creating Scan"
+# Incomplete (not started or no uploads) scan persist for 30 minutes until garbage collected.
 
-rm -f "${PC_IAC_CREATE_FILE}"
+echo "Creating Scan"
 
 JSON="
 {
   'data': {
     'type': 'async-scan',
     'attributes': {
-      'assetName': '${MODULE}',
+      'assetName': '${TEMPLATE}',
       'assetType': 'IaC-API',
       'tags': {
         'env': 'dev'
@@ -140,6 +158,7 @@ JSON="
 "
 JSON=${JSON//\'/\"}
 
+rm -f "${PC_IAC_CREATE_FILE}"
 curl --silent --show-error \
   --request POST "${API}/iac/v2/scans" \
   --header "x-redlock-auth: ${TOKEN}" \
@@ -177,17 +196,26 @@ debug "Scan ID: ${PC_IAC_ID}"
 
 #### Use the pre-signed URL from the scan asset creation to upload the files to be scanned.
 
+# After the scan is finished, uploaded files are deleted.
+
 echo "Uploading Files"
 
-ARCHIVE="/tmp/${MODULE}.zip"
+TEMPLATE_DIRNAME=$(dirname "${TEMPLATE}")
+TEMPLATE_BASENAME=$(basename "${TEMPLATE}")
+TEMPLATE_ARCHIVE="/tmp/${TEMPLATE_BASENAME}.zip"
 
-zip -r -q "${ARCHIVE}" "${MODULE}"
+if [ -d "${TEMPLATE}" ] || [ -f "${TEMPLATE}" ] ; then
+  cd "${TEMPLATE_DIRNAME}" || error_and_exit "Unable to change into ${TEMPLATE_DIRNAME}"
+  rm -r -f "${TEMPLATE_ARCHIVE}"
+  zip -r -q "${TEMPLATE_ARCHIVE}" "${TEMPLATE_BASENAME}"
+else
+  error_and_exit "Template file or directory to scan is not a file or directory: ${TEMPLATE}"
+fi
 
 rm -f "${PC_IAC_UPLOAD_FILE}"
-
 curl --silent --show-error \
   --request PUT "${PC_IAC_URL}" \
-  --upload-file "${ARCHIVE}" \
+  --upload-file "${TEMPLATE_ARCHIVE}" \
   --output "${PC_IAC_UPLOAD_FILE}"
 
 # TODO: Use --fail and/or --write-out '{http_code}' ?
@@ -195,7 +223,7 @@ if [ $? -ne 0 ]; then
   error_and_exit "Upload Scan Asset Failed"
 fi
 
-debug "Uploaded: ${ARCHIVE}"
+debug "Uploaded: ${TEMPLATE_ARCHIVE}"
 
 #### Start a job to perform a scan of the uploaded files.
 # https://api.docs.prismacloud.io/reference#triggerasyncscan-1
@@ -206,8 +234,6 @@ debug "Uploaded: ${ARCHIVE}"
 # Review the use of variables, variableFiles, files, and folders attributes.
 
 echo "Starting Scan"
-
-rm -f "${PC_IAC_START_FILE}"
 
 JSON="
 {
@@ -221,7 +247,7 @@ JSON="
 "
 JSON=${JSON//\'/\"}
 
-
+rm -f "${PC_IAC_START_FILE}"
 curl --silent --show-error \
   --request POST "${API}/iac/v2/scans/${PC_IAC_ID}" \
   --header "x-redlock-auth: ${TOKEN}" \
@@ -266,7 +292,6 @@ do
   sleep 4
 
   rm -f "${PC_IAC_STATUS_FILE}"
-
   HTTP_CODE=$(curl --silent --write-out '%{http_code}' \
     --request GET "${API}/iac/v2/scans/${PC_IAC_ID}/status" \
     --header "x-redlock-auth: ${TOKEN}" \
@@ -298,8 +323,11 @@ echo
 #### Query scan results.
 # https://api.docs.prismacloud.io/reference#getscanresult
 
+# Scan results persist for 90 days until garbage collected.
+
 echo "Querying Scan Results"
 
+rm -f "${PC_IAC_RESULTS}"
 curl --fail --silent --show-error \
   --request GET "${API}/iac/v2/scans/${PC_IAC_ID}/results" \
   --header "x-redlock-auth: ${TOKEN}" \
