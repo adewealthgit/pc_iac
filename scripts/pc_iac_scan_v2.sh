@@ -32,7 +32,7 @@ PASSWORD=1234567890=
 TEMPLATE=$1
 TEMPLATETYPE=$2
 
-TEMPLATE_TYPES=("cft", "k8s", "tf")
+TEMPLATE_TYPES=("cft" "k8s" "tf")
 
 #### Utility functions.
 
