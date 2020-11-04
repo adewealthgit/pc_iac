@@ -133,7 +133,7 @@ debug "Token: ${TOKEN}"
 
 echo "Creating Scan"
 
-JSON="
+JSON_SINGLE_QUOTED="
 {
   'data': {
     'type': 'async-scan',
@@ -156,7 +156,7 @@ JSON="
   }
 }
 "
-JSON=${JSON//\'/\"}
+JSON_DOUBLE_QUOTED=${JSON_SINGLE_QUOTED//\'/\"}
 
 rm -f "${PC_IAC_CREATE_FILE}"
 curl --silent --show-error \
@@ -164,7 +164,7 @@ curl --silent --show-error \
   --header "x-redlock-auth: ${TOKEN}" \
   --header "Accept: application/vnd.api+json" \
   --header "Content-Type: application/vnd.api+json" \
-  --data-raw "${JSON}" \
+  --data-raw "${JSON_DOUBLE_QUOTED}" \
   --output "${PC_IAC_CREATE_FILE}"
 
 # TODO: Use --fail and/or --write-out '{http_code}' ?
@@ -235,7 +235,7 @@ debug "Uploaded: ${TEMPLATE_ARCHIVE}"
 
 echo "Starting Scan"
 
-JSON="
+JSON_SINGLE_QUOTED="
 {
   'data': {
     'id': '${PC_IAC_ID}',
@@ -245,16 +245,16 @@ JSON="
   }
 }
 "
-JSON=${JSON//\'/\"}
+JSON_DOUBLE_QUOTED=${JSON_SINGLE_QUOTED//\'/\"}
 
 rm -f "${PC_IAC_START_FILE}"
 curl --silent --show-error \
   --request POST "${API}/iac/v2/scans/${PC_IAC_ID}" \
   --header "x-redlock-auth: ${TOKEN}" \
-  --header "Accept: application/vnd.api+json" \
   --header "Content-Type: application/vnd.api+json" \
-  --data-raw "${JSON}" \
+  --data-raw "${JSON_DOUBLE_QUOTED}" \
   --output "${PC_IAC_START_FILE}"
+# --header "Accept: application/vnd.api+json" \
 
 # TODO: Use --fail and/or --write-out '{http_code}' ?
 if [ $? -ne 0 ]; then
@@ -296,8 +296,8 @@ do
     --request GET "${API}/iac/v2/scans/${PC_IAC_ID}/status" \
     --header "x-redlock-auth: ${TOKEN}" \
     --header "Accept: application/vnd.api+json" \
-    --header "Content-Type: application/vnd.api+json" \
     --output "${PC_IAC_STATUS_FILE}")
+#   --header "Content-Type: application/vnd.api+json" \
 
   # TODO: Use --fail ?
   if [ $? -ne 0 ]; then
@@ -331,9 +331,9 @@ rm -f "${PC_IAC_RESULTS}"
 curl --fail --silent --show-error \
   --request GET "${API}/iac/v2/scans/${PC_IAC_ID}/results" \
   --header "x-redlock-auth: ${TOKEN}" \
-  --header 'Accept: application/vnd.api+json' \
-  --header "Content-Type: application/vnd.api+json" \
+  --header "Accept: application/vnd.api+json" \
   --output ${PC_IAC_RESULTS}
+# --header 'Content-Type: application/vnd.api+json' \
 
 if [ $? -ne 0 ]; then
   error_and_exit "Query Scan Results Failed"

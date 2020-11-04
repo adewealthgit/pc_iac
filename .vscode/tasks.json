@@ -4,7 +4,7 @@
         {
             "label": "pc_iac_scan",
             "type": "shell",
-            "command": "~/pc_iac_scan.sh ${relativeFileDirname}",
+            "command": "~/pc_iac_scan.sh ${relativeFileDirname} tf",
             "problemMatcher": [],
             "group": {
                 "kind": "test",
