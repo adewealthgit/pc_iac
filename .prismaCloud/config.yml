@@ -5,10 +5,12 @@ template_type: TF
 #   variable_files:
 #     - modulo/variables.tf
 
-terraform_012_parameters:
-  - root_module: /modulo/
-    variable_files: 
-    - /modulo/variables.tf
+terraform_version: 0.12
+
+#terraform_012_parameters:
+#  - root_module: /modulo/
+#    variable_files:
+#    - /modulo/variables.tf
 
 tags:
   - 'Org: PANW'
